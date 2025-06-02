@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Article 2: Basic Full‐Screen Quad (External GLSL)</title>
+        <style>
+            body,
+            html {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+                background: black;
+            }
+            canvas {
+                display: block;
+                width: 100vw;
+                height: 100vh;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="glCanvas"></canvas>
+        <script>
+            // Helper: load a text file via fetch
+            async function loadText(url) {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error(`Failed to load ${url}: ${resp.status}`);
+                return await resp.text();
+            }
+
+            // Compile a shader (vertex or fragment) from source
+            function compileShader(gl, type, src) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, src);
+                gl.compileShader(shader);
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                    gl.deleteShader(shader);
+                    return null;
+                }
+                return shader;
+            }
+
+            //         // ========== GLSL SHADERS IN FILES ==========
+
+            //         // (1) Vertex shader: pass a UV into the fragment shader
+            //         const basicVert = `#version 300 es
+            // layout(location = 0) in vec2 aPos;
+            // out vec2 vUV;
+            // void main() {
+            //   // Convert aPos from [-1,1] to [0,1] range for texture‐style UVs
+            //   vUV = aPos * 0.5 + 0.5;
+            //   gl_Position = vec4(aPos, 0.0, 1.0);
+            // }`;
+
+            //         // (2) Fragment shader: color each pixel by its vUV
+            //         const basicFrag = `#version 300 es
+            // precision mediump float;
+            // in vec2 vUV;
+            // out vec4 fragColor;
+            // void main() {
+            //   // Render a simple gradient: red = U, green = V, blue = 0.5
+            //   fragColor = vec4(vUV.x, vUV.y, 0.5, 1.0);
+            // }`;
+
+            // Link a program given a vertex and fragment shader source
+            function createProgram(gl, vertSrc, fragSrc) {
+                const vs = compileShader(gl, gl.VERTEX_SHADER, vertSrc);
+                const fs = compileShader(gl, gl.FRAGMENT_SHADER, fragSrc);
+                if (!vs || !fs) return null;
+
+                const program = gl.createProgram();
+                gl.attachShader(program, vs);
+                gl.attachShader(program, fs);
+                gl.linkProgram(program);
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    console.error('Program link error:', gl.getProgramInfoLog(program));
+                    gl.deleteProgram(program);
+                    return null;
+                }
+                return program;
+            }
+
+            // Create a VAO containing a single full‐screen quad (two triangles)
+            function createFullscreenQuadVAO(gl) {
+                const vao = gl.createVertexArray();
+                gl.bindVertexArray(vao);
+
+                // 6 vertices → two triangles covering NDC [-1,-1] to [1,1]
+                const verts = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
+
+                const vbo = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+                gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+
+                // In the vertex shader, we’ll use `layout(location=0) in vec2 aPos;`
+                gl.enableVertexAttribArray(0);
+                gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+                gl.bindVertexArray(null);
+                return vao;
+            }
+
+            let gl, canvas, quadVAO, programBasic;
+
+            window.onload = async () => {
+                // 1) Get canvas and WebGL 2 context
+                canvas = document.getElementById('glCanvas');
+                gl = canvas.getContext('webgl2');
+                if (!gl) {
+                    alert('WebGL 2 is not supported by this browser.');
+                    return;
+                }
+
+                // 2) Fetch external GLSL source files
+                const [vertSrc, fragSrc] = await Promise.all([
+                    loadText('shaders/basic.vert.glsl'),
+                    loadText('shaders/basic.frag.glsl'),
+                ]);
+
+                // 3) Compile & link the program using loaded sources
+                programBasic = createProgram(gl, vertSrc, fragSrc);
+
+                // 4) Create the full‐screen quad VAO
+                quadVAO = createFullscreenQuadVAO(gl);
+
+                // 5) Start the render loop
+                window.addEventListener('resize', resizeCanvas);
+                resizeCanvas();
+                requestAnimationFrame(render);
+            };
+
+            // Adjust canvas resolution when the window size changes
+            function resizeCanvas() {
+                const w = canvas.clientWidth;
+                const h = canvas.clientHeight;
+                if (canvas.width !== w || canvas.height !== h) {
+                    canvas.width = w;
+                    canvas.height = h;
+                    gl.viewport(0, 0, w, h);
+                }
+            }
+
+            // Draw one frame: bind the program, VAO, and draw the quad
+            function render() {
+                gl.clearColor(0.0, 0.0, 0.0, 1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                gl.useProgram(programBasic);
+                gl.bindVertexArray(quadVAO);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+                gl.bindVertexArray(null);
+                gl.useProgram(null);
+
+                requestAnimationFrame(render);
+            }
+        </script>
+    </body>
+</html>
