@@ -82,7 +82,7 @@
                 gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
                 gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
 
-                // In the vertex shader, we’ll use `layout(location=0) in vec2 aPos;`
+                // In the vertex shader, we’ll use `layout(location=0) in vec2 aPosition;`
                 gl.enableVertexAttribArray(0);
                 gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 

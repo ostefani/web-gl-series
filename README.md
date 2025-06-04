@@ -23,37 +23,12 @@ Each folder contains a self-contained example for its corresponding article.
 Browsers typically block `fetch()` calls over `file://`. To load shaders from external files, run a minimal HTTP server. From the project root:
 
 ```bash
-cd path/to/web-gl-series
+cd web-gl-series
 python3 -m http.server 8000
 ```
 
-Then open your browser and navigate to:
+Then open an example in your browser:
 
 ```
-http://localhost:8000/article-2-basic-quad/index.html
+http://localhost:8000/<article-name>/index.html
 ```
-
-or replace `article-2-basic-quad` with any other example folder name.
-
-## Usage
-
-1. **Clone the repository:**
-
-    ```bash
-    git clone https://github.com/your-username/web-gl-series.git
-    ```
-
-2. **Start the server:**
-
-    ```bash
-    cd web-gl-series
-    python3 -m http.server 8000
-    ```
-
-3. **Open an example in your browser:**
-
-    ```
-    http://localhost:8000/article-2-basic-quad/index.html
-    ```
-
-    Use the same pattern for `article-3-pingpong`, `article-4-pressure`, etc.
