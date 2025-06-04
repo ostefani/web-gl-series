@@ -41,28 +41,6 @@
                 return shader;
             }
 
-            //         // ========== GLSL SHADERS IN FILES ==========
-
-            //         // (1) Vertex shader: pass a UV into the fragment shader
-            //         const basicVert = `#version 300 es
-            // layout(location = 0) in vec2 aPos;
-            // out vec2 vUV;
-            // void main() {
-            //   // Convert aPos from [-1,1] to [0,1] range for texture‐style UVs
-            //   vUV = aPos * 0.5 + 0.5;
-            //   gl_Position = vec4(aPos, 0.0, 1.0);
-            // }`;
-
-            //         // (2) Fragment shader: color each pixel by its vUV
-            //         const basicFrag = `#version 300 es
-            // precision mediump float;
-            // in vec2 vUV;
-            // out vec4 fragColor;
-            // void main() {
-            //   // Render a simple gradient: red = U, green = V, blue = 0.5
-            //   fragColor = vec4(vUV.x, vUV.y, 0.5, 1.0);
-            // }`;
-
             // Link a program given a vertex and fragment shader source
             function createProgram(gl, vertSrc, fragSrc) {
                 const vs = compileShader(gl, gl.VERTEX_SHADER, vertSrc);
@@ -78,11 +56,22 @@
                     gl.deleteProgram(program);
                     return null;
                 }
+
+                // After linking, the shader objects are no longer needed. They can be detached and deleted:
+                gl.detachShader(program, vs);
+                gl.detachShader(program, fs);
+                gl.deleteShader(vs);
+                gl.deleteShader(fs);
+
+                gl.validateProgram(program);
+                if (!gl.getProgramParameter(program, gl.VALIDATE_STATUS)) {
+                    console.error('Validation failed:', gl.getProgramInfoLog(program));
+                }
                 return program;
             }
 
             // Create a VAO containing a single full‐screen quad (two triangles)
-            function createFullscreenQuadVAO(gl) {
+            function createFullScreenQuad(gl) {
                 const vao = gl.createVertexArray();
                 gl.bindVertexArray(vao);
 
@@ -123,7 +112,7 @@
                 programBasic = createProgram(gl, vertSrc, fragSrc);
 
                 // 4) Create the full‐screen quad VAO
-                quadVAO = createFullscreenQuadVAO(gl);
+                quadVAO = createFullScreenQuad(gl);
 
                 // 5) Start the render loop
                 window.addEventListener('resize', resizeCanvas);
@@ -150,6 +139,7 @@
                 gl.useProgram(programBasic);
                 gl.bindVertexArray(quadVAO);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
+                // Cleanup current frame state
                 gl.bindVertexArray(null);
                 gl.useProgram(null);
 
