@@ -1,9 +1,9 @@
-```markdown
 # Web-GL-Series
 
 A collection of code examples for a step-by-step WebGL 2 tutorial series, ranging from a basic full-screen quad (Article 2) up to a real-time fluid simulation (Article 6).
 
 ## Repository Structure
+
 ```
 
 web-gl-series/
@@ -14,7 +14,7 @@ web-gl-series/
 │ ├── basic.vert.glsl
 │ └── basic.frag.glsl
 
-````
+```
 
 Each folder contains a self-contained example for its corresponding article.
 
@@ -25,7 +25,7 @@ Browsers typically block `fetch()` calls over `file://`. To load shaders from ex
 ```bash
 cd path/to/web-gl-series
 python3 -m http.server 8000
-````
+```
 
 Then open your browser and navigate to:
 
@@ -57,7 +57,3 @@ or replace `article-2-basic-quad` with any other example folder name.
     ```
 
     Use the same pattern for `article-3-pingpong`, `article-4-pressure`, etc.
-
----
-
-Feel free to explore and modify the shaders and JavaScript as you follow along each article in the series.
