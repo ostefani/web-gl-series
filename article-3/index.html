@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>WebGL Article 3: Rendering to Textures with Framebuffers</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #000;
+            }
+
+            canvas {
+                display: block;
+                width: 100vw;
+                height: 100vh;
+            }
+
+            .controls {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                background: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 15px;
+                border-radius: 8px;
+                font-size: 14px;
+            }
+
+            .controls label {
+                display: block;
+                margin-bottom: 10px;
+                cursor: pointer;
+            }
+
+            .controls input[type='checkbox'] {
+                margin-right: 8px;
+            }
+
+            .controls input[type='range'] {
+                width: 150px;
+                margin-left: 8px;
+            }
+
+            .error {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: #ff4444;
+                text-align: center;
+                font-size: 18px;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="canvas"></canvas>
+        <div class="controls">
+            <label>
+                <input type="checkbox" id="effectToggle" checked />
+                Enable Grayscale Effect
+            </label>
+            <label>
+                Split View
+                <input type="range" id="splitSlider" min="0" max="100" value="50" />
+            </label>
+        </div>
+
+        <script type="module" src="src/main.js"></script>
+    </body>
+</html>

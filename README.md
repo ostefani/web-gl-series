@@ -2,19 +2,8 @@
 
 A collection of code examples for a step-by-step WebGL 2 tutorial series, ranging from a basic full-screen quad (Article 2) up to a real-time fluid simulation (Article 6).
 
-## Repository Structure
-
-```
-
-web-gl-series/
-├── README.md
-├── article-2-basic-quad/
-│ ├── index.html
-│ └── shaders/
-│ ├── basic.vert.glsl
-│ └── basic.frag.glsl
-
-```
+-   [Article 2 Demo](https://ostefani.github.io/web-gl-series/article-2)
+-   [Article 3 Demo](https://ostefani.github.io/web-gl-series/article-3)
 
 Each folder contains a self-contained example for its corresponding article.
 
