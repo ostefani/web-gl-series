@@ -1,4 +1,4 @@
-/**Article 3 */
+/**Article 5 */
 /**
  * Fetches and loads a shader source file
  * @param {string} url - Path to the shader file
@@ -64,11 +64,6 @@ function createProgram(gl, vertexSource, fragmentSource) {
 
 /**
  * Creates an optimized full-screen quad VAO using indexed drawing
- *
- * Instead of duplicating vertices, we define 4 unique vertices and use
- * indices to specify which vertices form our two triangles.
- * This reduces memory usage and is more efficient.
- *
  * @param {WebGL2RenderingContext} gl
  * @returns {WebGLVertexArrayObject}
  */
@@ -120,9 +115,11 @@ function createFullScreenQuad(gl) {
 /**
  * Creates a texture and framebuffer for off-screen rendering
  * @param {WebGL2RenderingContext} gl
+ * @param {number} width
+ * @param {number} height
  * @returns {{texture: WebGLTexture, framebuffer: WebGLFramebuffer}}
  */
-function createFramebuffer(gl) {
+function createFramebuffer(gl, width, height) {
     // Create texture
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -131,8 +128,8 @@ function createFramebuffer(gl) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    // Allocate minimal storage - we'll resize before each render
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    // Allocate texture storage
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
     // Create framebuffer
     const framebuffer = gl.createFramebuffer();
@@ -155,7 +152,32 @@ function createFramebuffer(gl) {
 }
 
 /**
- * Main application
+ * Creates a pair of framebuffers for ping-pong rendering
+ * @param {WebGL2RenderingContext} gl
+ * @param {number} width
+ * @param {number} height
+ * @returns {{read: Object, write: Object, swap: Function}}
+ */
+function createPingPongFramebuffers(gl, width, height) {
+    const fboA = createFramebuffer(gl, width, height);
+    const fboB = createFramebuffer(gl, width, height);
+
+    return {
+        read: fboA,
+        write: fboB,
+        swap: function () {
+            [this.read, this.write] = [this.write, this.read];
+        },
+    };
+}
+
+/**
+ * Main application - Advection Demo
+ * Based on the article 4 code structure
+ */
+/**
+ * Main application - Advection Demo
+ * Based on the article 4 code structure
  */
 async function main() {
     const canvas = document.getElementById('canvas');
@@ -167,34 +189,85 @@ async function main() {
     }
 
     try {
-        const [vertexSource, sceneFragmentSource, postProcessFragmentSource] = await Promise.all([
-            loadShader('src/shaders/basic.vert.glsl'),
-            loadShader('src/shaders/basic.frag.glsl'),
-            loadShader('src/shaders/postprocess.frag.glsl'),
-        ]);
+        // Load shaders
+        const [vertexSource, velocityFieldSource, initialSceneSource, advectionSource, displaySource] =
+            await Promise.all([
+                loadShader('src/shaders/basic.vert.glsl'),
+                loadShader('src/shaders/velocity-field.frag.glsl'),
+                loadShader('src/shaders/initial-scene.frag.glsl'),
+                loadShader('src/shaders/advection.frag.glsl'),
+                loadShader('src/shaders/display.frag.glsl'),
+            ]);
 
-        const sceneProgram = createProgram(gl, vertexSource, sceneFragmentSource);
-        const postProcessProgram = createProgram(gl, vertexSource, postProcessFragmentSource);
+        // Create shader programs
+        const velocityProgram = createProgram(gl, vertexSource, velocityFieldSource);
+        const initialSceneProgram = createProgram(gl, vertexSource, initialSceneSource);
+        const advectionProgram = createProgram(gl, vertexSource, advectionSource);
+        const displayProgram = createProgram(gl, vertexSource, displaySource);
 
-        if (!sceneProgram || !postProcessProgram) {
+        if (!velocityProgram || !initialSceneProgram || !advectionProgram || !displayProgram) {
             throw new Error('Failed to create shader programs');
         }
 
+        // Create geometry
         const quadVAO = createFullScreenQuad(gl);
 
-        const { texture: sceneTexture, framebuffer } = createFramebuffer(gl);
+        // Create framebuffers
+        let quantityFboPair = createPingPongFramebuffers(gl, gl.canvas.width, gl.canvas.height);
+        let velocityFbo = createFramebuffer(gl, gl.canvas.width, gl.canvas.height);
 
-        const postProcessUniforms = {
-            sceneTexture: gl.getUniformLocation(postProcessProgram, 'uSceneTexture'),
-            splitPosition: gl.getUniformLocation(postProcessProgram, 'uSplitPosition'),
-            enableEffect: gl.getUniformLocation(postProcessProgram, 'uEnableEffect'),
+        // Get uniform locations
+        const velocityUniforms = {
+            aspectRatio: gl.getUniformLocation(velocityProgram, 'uAspectRatio'),
         };
 
-        const effectToggle = document.getElementById('effectToggle');
-        const splitSlider = document.getElementById('splitSlider');
+        const advectionUniforms = {
+            quantity: gl.getUniformLocation(advectionProgram, 'uQuantity'),
+            velocity: gl.getUniformLocation(advectionProgram, 'uVelocity'),
+            dt: gl.getUniformLocation(advectionProgram, 'uDt'),
+        };
 
-        let textureWidth = 1;
-        let textureHeight = 1;
+        const displayUniforms = {
+            displayTexture: gl.getUniformLocation(displayProgram, 'uDisplayTexture'),
+        };
+
+        // Time step for stable simulation
+        const dt = 0.016; // Good default for 60fps
+
+        // Initialize velocity field (only done once for static field)
+        function initializeVelocityField() {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, velocityFbo.framebuffer);
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+            gl.useProgram(velocityProgram);
+            gl.uniform1f(velocityUniforms.aspectRatio, gl.canvas.width / gl.canvas.height);
+
+            gl.bindVertexArray(quadVAO);
+            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+
+        // Initialize quantity (dye) - draw initial colored shape
+        function initializeQuantity() {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, quantityFboPair.write.framebuffer);
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.useProgram(initialSceneProgram);
+            gl.bindVertexArray(quadVAO);
+            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+            // Swap so the initial state is in the read buffer
+            quantityFboPair.swap();
+        }
+
+        // Initialize everything
+        initializeVelocityField();
+        initializeQuantity();
 
         function resize() {
             const displayWidth = canvas.clientWidth;
@@ -203,62 +276,66 @@ async function main() {
             if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
                 canvas.width = displayWidth;
                 canvas.height = displayHeight;
+
+                // Recreate framebuffers with new size
+                quantityFboPair = createPingPongFramebuffers(gl, displayWidth, displayHeight);
+                velocityFbo = createFramebuffer(gl, displayWidth, displayHeight);
+
+                // Reinitialize everything
+                initializeVelocityField();
+                initializeQuantity();
             }
         }
 
         function render() {
             resize();
 
-            const width = gl.canvas.width;
-            const height = gl.canvas.height;
+            // --- Advection Pass: Read from 'read', write to 'write' ---
+            gl.bindFramebuffer(gl.FRAMEBUFFER, quantityFboPair.write.framebuffer);
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
-            // --- PASS 1: Render scene to framebuffer ---
+            gl.useProgram(advectionProgram);
 
-            // Bind framebuffer
-            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-
-            // Resize texture if needed
-            if (width !== textureWidth || height !== textureHeight) {
-                gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-                textureWidth = width;
-                textureHeight = height;
-            }
-
-            // Set viewport and clear
-            gl.viewport(0, 0, width, height);
-            gl.clearColor(0, 0, 0, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            // Render scene
-            gl.useProgram(sceneProgram);
-            gl.bindVertexArray(quadVAO);
-            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-
-            // --- PASS 2: Render to screen with post-processing ---
-
-            // Unbind framebuffer (render to canvas)
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-            // Set viewport
-            gl.viewport(0, 0, width, height);
-
-            // Use post-process shader
-            gl.useProgram(postProcessProgram);
-
-            // Set uniforms
+            // Bind the quantity texture from previous frame
             gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, sceneTexture);
-            gl.uniform1i(postProcessUniforms.sceneTexture, 0);
-            gl.uniform1f(postProcessUniforms.splitPosition, splitSlider.value / 100);
-            gl.uniform1i(postProcessUniforms.enableEffect, effectToggle.checked ? 1 : 0);
+            gl.bindTexture(gl.TEXTURE_2D, quantityFboPair.read.texture);
+            gl.uniform1i(advectionUniforms.quantity, 0);
 
-            // Render quad
+            // Bind the velocity field texture
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, velocityFbo.texture);
+            gl.uniform1i(advectionUniforms.velocity, 1);
+
+            // Set timestep
+            gl.uniform1f(advectionUniforms.dt, dt);
+
             gl.bindVertexArray(quadVAO);
             gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+            // --- Display Pass: Render result to screen ---
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+            gl.useProgram(displayProgram);
+
+            // Display the texture we just wrote to
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, quantityFboPair.write.texture);
+            gl.uniform1i(displayUniforms.displayTexture, 0);
+
+            gl.bindVertexArray(quadVAO);
+            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+            // Swap for next frame
+            quantityFboPair.swap();
 
             requestAnimationFrame(render);
         }
+
+        // Add mouse interaction - reset on click
+        canvas.addEventListener('click', () => {
+            initializeQuantity();
+        });
 
         requestAnimationFrame(render);
     } catch (error) {
