@@ -120,6 +120,11 @@ function createFullScreenQuad(gl) {
  * @returns {{texture: WebGLTexture, framebuffer: WebGLFramebuffer}}
  */
 function createFramebuffer(gl, width, height) {
+    const ext = gl.getExtension('EXT_color_buffer_float');
+
+    if (!ext) {
+        console.error('EXT_color_buffer_float not supported');
+    }
     // Create texture
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -129,7 +134,8 @@ function createFramebuffer(gl, width, height) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
     // Allocate texture storage
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    // Use floating-point format - RGBA16F - for better precision and negative value support
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, null);
 
     // Create framebuffer
     const framebuffer = gl.createFramebuffer();
