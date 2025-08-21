@@ -1,4 +1,3 @@
-/* Article 4 */
 /**
  * Fetches and loads a shader source file
  * @param {string} url - Path to the shader file
