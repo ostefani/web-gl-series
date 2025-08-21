@@ -205,7 +205,7 @@ async function main() {
         const quadVAO = createFullScreenQuad(gl);
 
         // Create ping-pong framebuffers
-        let fboPair = createPingPongFramebuffers(gl, gl.canvas.width, gl.canvas.height);
+        let quantityFboPair = createPingPongFramebuffers(gl, gl.canvas.width, gl.canvas.height);
 
         // Get uniform locations
         const feedbackUniforms = {
@@ -218,7 +218,7 @@ async function main() {
 
         // Initialize: Draw the initial scene once
         function initializeScene() {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, fboPair.read.framebuffer);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, quantityFboPair.read.framebuffer);
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
             gl.clearColor(0, 0, 0, 1);
             gl.clear(gl.COLOR_BUFFER_BIT);
@@ -241,7 +241,7 @@ async function main() {
                 canvas.height = displayHeight;
 
                 // Recreate framebuffers with new size
-                fboPair = createPingPongFramebuffers(gl, displayWidth, displayHeight);
+                quantityFboPair = createPingPongFramebuffers(gl, displayWidth, displayHeight);
 
                 // Reinitialize the scene
                 initializeScene();
@@ -252,14 +252,14 @@ async function main() {
             resize();
 
             // --- Feedback Pass: Read from 'read', write to 'write' ---
-            gl.bindFramebuffer(gl.FRAMEBUFFER, fboPair.write.framebuffer);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, quantityFboPair.write.framebuffer);
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
             gl.useProgram(feedbackProgram);
 
             // Bind the 'read' texture as input
             gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, fboPair.read.texture);
+            gl.bindTexture(gl.TEXTURE_2D, quantityFboPair.read.texture);
             gl.uniform1i(feedbackUniforms.previousFrame, 0);
 
             gl.bindVertexArray(quadVAO);
@@ -273,14 +273,14 @@ async function main() {
 
             // Display the texture we just wrote to
             gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, fboPair.write.texture);
+            gl.bindTexture(gl.TEXTURE_2D, quantityFboPair.write.texture);
             gl.uniform1i(displayUniforms.displayTexture, 0);
 
             gl.bindVertexArray(quadVAO);
             gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 
             // Swap for next frame
-            fboPair.swap();
+            quantityFboPair.swap();
 
             requestAnimationFrame(render);
         }

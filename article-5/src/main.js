@@ -135,7 +135,7 @@ function createFramebuffer(gl, width, height) {
 
     // Allocate texture storage
     // Use floating-point format - RGBA16F - for better precision and negative value support
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.HALF_FLOAT, null);
 
     // Create framebuffer
     const framebuffer = gl.createFramebuffer();
