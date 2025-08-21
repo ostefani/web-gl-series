@@ -1,3 +1,4 @@
+/**Article 5 */
 /**
  * Fetches and loads a shader source file
  * @param {string} url - Path to the shader file
@@ -119,6 +120,11 @@ function createFullScreenQuad(gl) {
  * @returns {{texture: WebGLTexture, framebuffer: WebGLFramebuffer}}
  */
 function createFramebuffer(gl, width, height) {
+    const ext = gl.getExtension('EXT_color_buffer_float');
+
+    if (!ext) {
+        console.error('EXT_color_buffer_float not supported');
+    }
     // Create texture
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -128,7 +134,8 @@ function createFramebuffer(gl, width, height) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
     // Allocate texture storage
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    // Use floating-point format - RGBA16F - for better precision and negative value support
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.HALF_FLOAT, null);
 
     // Create framebuffer
     const framebuffer = gl.createFramebuffer();
@@ -171,7 +178,12 @@ function createPingPongFramebuffers(gl, width, height) {
 }
 
 /**
- * Main application
+ * Main application - Advection Demo
+ * Based on the article 4 code structure
+ */
+/**
+ * Main application - Advection Demo
+ * Based on the article 4 code structure
  */
 async function main() {
     const canvas = document.getElementById('canvas');
@@ -184,40 +196,67 @@ async function main() {
 
     try {
         // Load shaders
-        const [vertexSource, initialSceneSource, feedbackSource, displaySource] = await Promise.all([
-            loadShader('src/shaders/basic.vert.glsl'),
-            loadShader('src/shaders/initial-scene.frag.glsl'),
-            loadShader('src/shaders/feedback.frag.glsl'),
-            loadShader('src/shaders/display.frag.glsl'),
-        ]);
+        const [vertexSource, velocityFieldSource, initialSceneSource, advectionSource, displaySource] =
+            await Promise.all([
+                loadShader('src/shaders/basic.vert.glsl'),
+                loadShader('src/shaders/velocity-field.frag.glsl'),
+                loadShader('src/shaders/initial-scene.frag.glsl'),
+                loadShader('src/shaders/advection.frag.glsl'),
+                loadShader('src/shaders/display.frag.glsl'),
+            ]);
 
         // Create shader programs
+        const velocityProgram = createProgram(gl, vertexSource, velocityFieldSource);
         const initialSceneProgram = createProgram(gl, vertexSource, initialSceneSource);
-        const feedbackProgram = createProgram(gl, vertexSource, feedbackSource);
+        const advectionProgram = createProgram(gl, vertexSource, advectionSource);
         const displayProgram = createProgram(gl, vertexSource, displaySource);
 
-        if (!initialSceneProgram || !feedbackProgram || !displayProgram) {
+        if (!velocityProgram || !initialSceneProgram || !advectionProgram || !displayProgram) {
             throw new Error('Failed to create shader programs');
         }
 
         // Create geometry
         const quadVAO = createFullScreenQuad(gl);
 
-        // Create ping-pong framebuffers
+        // Create framebuffers
         let quantityFboPair = createPingPongFramebuffers(gl, gl.canvas.width, gl.canvas.height);
+        let velocityFbo = createFramebuffer(gl, gl.canvas.width, gl.canvas.height);
 
         // Get uniform locations
-        const feedbackUniforms = {
-            previousFrame: gl.getUniformLocation(feedbackProgram, 'uPreviousFrame'),
+        const velocityUniforms = {
+            aspectRatio: gl.getUniformLocation(velocityProgram, 'uAspectRatio'),
+        };
+
+        const advectionUniforms = {
+            quantity: gl.getUniformLocation(advectionProgram, 'uQuantity'),
+            velocity: gl.getUniformLocation(advectionProgram, 'uVelocity'),
+            dt: gl.getUniformLocation(advectionProgram, 'uDt'),
         };
 
         const displayUniforms = {
             displayTexture: gl.getUniformLocation(displayProgram, 'uDisplayTexture'),
         };
 
-        // Initialize: Draw the initial scene once
-        function initializeScene() {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, quantityFboPair.read.framebuffer);
+        // Time step for stable simulation
+        const dt = 0.016; // Good default for 60fps
+
+        // Initialize velocity field (only done once for static field)
+        function initializeVelocityField() {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, velocityFbo.framebuffer);
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+            gl.useProgram(velocityProgram);
+            gl.uniform1f(velocityUniforms.aspectRatio, gl.canvas.width / gl.canvas.height);
+
+            gl.bindVertexArray(quadVAO);
+            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+
+        // Initialize quantity (dye) - draw initial colored shape
+        function initializeQuantity() {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, quantityFboPair.write.framebuffer);
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
             gl.clearColor(0, 0, 0, 1);
             gl.clear(gl.COLOR_BUFFER_BIT);
@@ -227,9 +266,14 @@ async function main() {
             gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+            // Swap so the initial state is in the read buffer
+            quantityFboPair.swap();
         }
 
-        initializeScene();
+        // Initialize everything
+        initializeVelocityField();
+        initializeQuantity();
 
         function resize() {
             const displayWidth = canvas.clientWidth;
@@ -241,25 +285,35 @@ async function main() {
 
                 // Recreate framebuffers with new size
                 quantityFboPair = createPingPongFramebuffers(gl, displayWidth, displayHeight);
+                velocityFbo = createFramebuffer(gl, displayWidth, displayHeight);
 
-                // Reinitialize the scene
-                initializeScene();
+                // Reinitialize everything
+                initializeVelocityField();
+                initializeQuantity();
             }
         }
 
         function render() {
             resize();
 
-            // --- Feedback Pass: Read from 'read', write to 'write' ---
+            // --- Advection Pass: Read from 'read', write to 'write' ---
             gl.bindFramebuffer(gl.FRAMEBUFFER, quantityFboPair.write.framebuffer);
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
-            gl.useProgram(feedbackProgram);
+            gl.useProgram(advectionProgram);
 
-            // Bind the 'read' texture as input
+            // Bind the quantity texture from previous frame
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, quantityFboPair.read.texture);
-            gl.uniform1i(feedbackUniforms.previousFrame, 0);
+            gl.uniform1i(advectionUniforms.quantity, 0);
+
+            // Bind the velocity field texture
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, velocityFbo.texture);
+            gl.uniform1i(advectionUniforms.velocity, 1);
+
+            // Set timestep
+            gl.uniform1f(advectionUniforms.dt, dt);
 
             gl.bindVertexArray(quadVAO);
             gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
@@ -283,6 +337,11 @@ async function main() {
 
             requestAnimationFrame(render);
         }
+
+        // Add mouse interaction - reset on click
+        canvas.addEventListener('click', () => {
+            initializeQuantity();
+        });
 
         requestAnimationFrame(render);
     } catch (error) {
