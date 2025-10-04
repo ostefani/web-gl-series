@@ -6,6 +6,7 @@ A collection of code examples for a step-by-step WebGL 2 tutorial series, rangin
 -   [Article 3 Demo](https://ostefani.github.io/web-gl-series/article-3)
 -   [Article 4 Demo](https://ostefani.github.io/web-gl-series/article-4)
 -   [Article 5 Demo](https://ostefani.github.io/web-gl-series/article-5)
+-   [Article 6 Demo](https://ostefani.github.io/web-gl-series/article-6)
 
 Each folder contains a self-contained example for its corresponding article.
 
