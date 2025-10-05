@@ -36,7 +36,7 @@ Each folder contains a self-contained example for its corresponding article.
 
 ## Running a Local Server
 
-Browsers typically block `fetch()` calls over `file://`. To load shaders from external files, run a minimal HTTP server. From the project root:
+To load shaders from external files, run a minimal HTTP server. From the project root:
 
 ```bash
 cd web-gl-series
